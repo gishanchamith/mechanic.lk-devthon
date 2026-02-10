@@ -37,6 +37,7 @@ app.use('/api/auctions', require('./routes/auctionRoutes'));
 app.use('/api/service-requests', require('./routes/serviceRequestRoutes'));
 app.use('/api/bookings', require('./routes/bookingRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
+app.use('/api/vehicles', require('./routes/vehicleRoutes'));
 
 app.use('/uploads', express.static('uploads'));
 

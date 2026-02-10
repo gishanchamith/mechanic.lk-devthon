@@ -69,6 +69,13 @@ const acceptServiceRequest = asyncHandler(async (req, res) => {
 // @access  Private (Driver/Mechanic)
 const updateServiceRequestStatus = asyncHandler(async (req, res) => {
     const { status } = req.body;
+
+    const allowedStatuses = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
+    if (!status || !allowedStatuses.includes(status)) {
+        res.status(400);
+        throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(', ')}`);
+    }
+
     const request = await ServiceRequest.findById(req.params.id);
 
     if (!request) {

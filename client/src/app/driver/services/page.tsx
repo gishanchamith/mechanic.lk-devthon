@@ -1,15 +1,30 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { ServiceCard } from '@/components/features/ServiceCard';
+import { VehicleSelector } from '@/components/features/VehicleSelector';
+import { Toast } from '@/components/ui/Toast';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 
 // Dynamically import Map
 const Map = dynamic(() => import('@/components/ui/Map'), {
     ssr: false,
     loading: () => <div className="h-full w-full bg-gray-100 dark:bg-gray-800 animate-pulse flex items-center justify-center text-gray-400">Loading Map...</div>
 });
+
+function calcDistance(lat1: number, lon1: number, lat2: number, lon2: number): string {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const d = R * c;
+    return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)}km`;
+}
 
 export default function ServicesPage() {
     const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
@@ -19,21 +34,19 @@ export default function ServicesPage() {
     const [selectedMechanic, setSelectedMechanic] = useState<any | null>(null);
     const [issueDescription, setIssueDescription] = useState('');
     const [vehicleDetails, setVehicleDetails] = useState({ make: '', model: '', year: '' });
-    const [vehicles, setVehicles] = useState<{ id: string; make: string; model: string; year: string; plate: string }[]>([]);
-    const [selectedVehicleId, setSelectedVehicleId] = useState('');
     const [requestLoading, setRequestLoading] = useState(false);
     const [requestError, setRequestError] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
     useEffect(() => {
-        // Get Location
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     setUserLocation([position.coords.latitude, position.coords.longitude]);
                 },
-                (error) => {
-                    console.error("Error getting location", error);
-                    setUserLocation([6.9271, 79.8612]); // Fallback Colombo
+                () => {
+                    setUserLocation([6.9271, 79.8612]);
                 }
             );
         } else {
@@ -58,8 +71,8 @@ export default function ServicesPage() {
                 } else {
                     setMechanics([]);
                 }
-            } catch (error) {
-                console.error("Error fetching mechanics", error);
+            } catch {
+                setMechanics([]);
             } finally {
                 setLoading(false);
             }
@@ -70,23 +83,25 @@ export default function ServicesPage() {
         }
     }, [userLocation]);
 
-    useEffect(() => {
-        const stored = localStorage.getItem('driverVehicles');
-        if (stored) {
-            setVehicles(JSON.parse(stored));
-        }
-    }, []);
-
-    const applyVehicle = (vehicle: { make: string; model: string; year: string } | null) => {
-        if (!vehicle) return;
-        setVehicleDetails({
-            make: vehicle.make,
-            model: vehicle.model,
-            year: vehicle.year
-        });
+    const getDistance = (mech: any): string => {
+        if (!userLocation || !mech.location?.coordinates) return 'N/A';
+        return calcDistance(
+            userLocation[0], userLocation[1],
+            mech.location.coordinates[1], mech.location.coordinates[0]
+        );
     };
 
-    const mapMarkers = mechanics.map(mech => ({
+    const filteredMechanics = mechanics.filter((mech) => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+            mech.businessName?.toLowerCase().includes(q) ||
+            mech.description?.toLowerCase().includes(q) ||
+            mech.services?.some((s: any) => s.name?.toLowerCase().includes(q))
+        );
+    });
+
+    const mapMarkers = filteredMechanics.map(mech => ({
         id: mech._id,
         position: [mech.location.coordinates[1], mech.location.coordinates[0]] as [number, number],
         title: mech.businessName,
@@ -98,7 +113,6 @@ export default function ServicesPage() {
         setSelectedMechanic(mechanic);
         setIssueDescription('');
         setVehicleDetails({ make: '', model: '', year: '' });
-        setSelectedVehicleId('');
         setRequestError('');
     };
 
@@ -107,12 +121,10 @@ export default function ServicesPage() {
             setRequestError('Mechanic info not available.');
             return;
         }
-
         if (!issueDescription.trim()) {
             setRequestError('Please describe the issue.');
             return;
         }
-
         setRequestLoading(true);
         setRequestError('');
 
@@ -140,6 +152,7 @@ export default function ServicesPage() {
                 throw new Error(data.message || 'Failed to create request');
             }
             setSelectedMechanic(null);
+            setToast({ message: 'Service request sent successfully!', type: 'success' });
         } catch (err: any) {
             setRequestError(err.message || 'Something went wrong');
         } finally {
@@ -149,6 +162,8 @@ export default function ServicesPage() {
 
     return (
         <div className="relative h-screen w-full bg-background-light dark:bg-background-dark overflow-hidden flex flex-col">
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
             {/* Header */}
             <div className="absolute top-0 z-20 w-full px-6 pt-6 pb-2 bg-gradient-to-b from-background-light/90 to-transparent dark:from-background-dark/90 pointer-events-none">
                 <div className="pointer-events-auto flex items-center gap-3 mb-4">
@@ -157,12 +172,16 @@ export default function ServicesPage() {
                         <input
                             type="text"
                             placeholder="Find mechanics, garages..."
-                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium text-text-main dark:text-white placeholder:text-text-sub"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium text-text-main dark:text-white placeholder:text-text-sub outline-none"
                         />
+                        {searchQuery && (
+                            <button onClick={() => setSearchQuery('')} className="text-gray-400 hover:text-gray-600">
+                                <span className="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                        )}
                     </div>
-                    <button className="h-10 w-10 rounded-full bg-white dark:bg-card-dark shadow-soft flex items-center justify-center text-text-main dark:text-white border border-gray-100 dark:border-gray-800">
-                        <span className="material-symbols-outlined">tune</span>
-                    </button>
                 </div>
 
                 {/* Toggle View */}
@@ -198,23 +217,27 @@ export default function ServicesPage() {
                 {/* List View */}
                 <div className={`absolute inset-0 overflow-y-auto px-6 pb-24 transition-opacity duration-300 ${viewMode === 'list' ? 'opacity-100 z-10 bg-background-light dark:bg-background-dark' : 'opacity-0 z-0 pointer-events-none'}`}>
                     {loading ? (
-                        <p className="text-center text-gray-500 mt-10">Scanning area...</p>
-                    ) : mechanics.length === 0 ? (
+                        <div className="grid gap-4 pt-2">
+                            <SkeletonCard />
+                            <SkeletonCard />
+                            <SkeletonCard />
+                        </div>
+                    ) : filteredMechanics.length === 0 ? (
                         <div className="text-center mt-20 opacity-60">
                             <span className="material-symbols-outlined text-4xl mb-2 sm:text-5xl">location_off</span>
-                            <p>No mechanics found nearby.</p>
+                            <p>{searchQuery ? 'No mechanics match your search.' : 'No mechanics found nearby.'}</p>
                         </div>
                     ) : (
                         <div className="grid gap-4 pt-2">
-                            {mechanics.map((mech) => (
+                            {filteredMechanics.map((mech) => (
                                 <ServiceCard
                                     key={mech._id}
                                     title={mech.businessName}
                                     providerName={mech.user?.name || 'Mechanic'}
-                                    price={mech.services?.[0]?.price || 0} // Display first service price or 0
-                                    rating={mech.rating || 4.8} // Use rating or default
+                                    price={mech.services?.[0]?.price || 0}
+                                    rating={mech.rating || 4.8}
                                     timeEstimate={mech.services?.[0]?.estimatedTime ? `${mech.services[0].estimatedTime} mins` : '15 mins'}
-                                    distance="2.5km" // Placeholder for now
+                                    distance={getDistance(mech)}
                                     tags={mech.services?.map((s: any) => s.name).slice(0, 3)}
                                     onBook={() => handleOpenRequest(mech)}
                                 />
@@ -225,7 +248,7 @@ export default function ServicesPage() {
             </div>
 
             {selectedMechanic && (
-                <div className="fixed inset-0 z-60 flex items-end justify-center bg-black/40 p-4">
+                <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-4">
                     <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-card-dark p-5 shadow-xl">
                         <div className="flex items-start justify-between mb-3">
                             <div>
@@ -244,49 +267,12 @@ export default function ServicesPage() {
                             <div className="mb-3 rounded-xl bg-red-100 text-red-600 p-2 text-xs font-bold">{requestError}</div>
                         )}
 
-                        <div className="mb-3">
-                            <label className="block text-xs font-bold uppercase tracking-wide text-text-sub mb-2">Saved Vehicle</label>
-                            <select
-                                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
-                                value={selectedVehicleId}
-                                onChange={(e) => {
-                                    const value = e.target.value;
-                                    setSelectedVehicleId(value);
-                                    const selected = vehicles.find((v) => v.id === value) || null;
-                                    applyVehicle(selected);
-                                }}
-                            >
-                                <option value="">Choose from garage (optional)</option>
-                                {vehicles.map((vehicle) => (
-                                    <option key={vehicle.id} value={vehicle.id}>
-                                        {vehicle.year} {vehicle.make} {vehicle.model}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                        <VehicleSelector
+                            onVehicleChange={(details) => setVehicleDetails(details)}
+                        />
 
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                            <input
-                                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
-                                placeholder="Make"
-                                value={vehicleDetails.make}
-                                onChange={(e) => setVehicleDetails({ ...vehicleDetails, make: e.target.value })}
-                            />
-                            <input
-                                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
-                                placeholder="Model"
-                                value={vehicleDetails.model}
-                                onChange={(e) => setVehicleDetails({ ...vehicleDetails, model: e.target.value })}
-                            />
-                            <input
-                                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
-                                placeholder="Year"
-                                value={vehicleDetails.year}
-                                onChange={(e) => setVehicleDetails({ ...vehicleDetails, year: e.target.value })}
-                            />
-                        </div>
                         <textarea
-                            className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
+                            className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm mt-3"
                             rows={3}
                             placeholder="Describe the issue"
                             value={issueDescription}

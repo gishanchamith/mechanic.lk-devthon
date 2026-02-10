@@ -96,7 +96,7 @@ const getAuctions = asyncHandler(async (req, res) => {
 const getAuctionById = asyncHandler(async (req, res) => {
     const auction = await Auction.findById(req.params.id)
         .populate('user', 'name avatarUrl phone')
-        .populate('bids.bidder', 'name avatarUrl');
+        .populate('bids.bidder', 'name avatarUrl phone');
 
     if (auction) {
         res.json(auction);

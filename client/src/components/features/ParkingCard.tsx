@@ -44,7 +44,7 @@ export function ParkingCard({ title, description, pricePerHour, distance, vehicl
 
             <div className="mt-auto flex items-end justify-between border-t border-gray-100 dark:border-gray-700 pt-4">
                 <div>
-                    <span className="text-2xl font-black text-primary">${pricePerHour}</span>
+                    <span className="text-2xl font-black text-primary">LKR {pricePerHour}</span>
                     <span className="text-xs text-text-sub font-medium ml-1">/ hr</span>
                 </div>
                 <button

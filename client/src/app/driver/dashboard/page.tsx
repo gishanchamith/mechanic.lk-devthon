@@ -7,7 +7,7 @@ import { BottomNav } from '@/components/ui/BottomNav';
 export default function DriverDashboard() {
     const router = useRouter();
     const pathname = usePathname();
-    const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+    const [user, setUser] = useState<{ name: string; email: string; avatarUrl?: string } | null>(null);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -38,9 +38,13 @@ export default function DriverDashboard() {
                 <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="relative">
-                            <div className="h-16 w-16 rounded-full bg-cover bg-center border-2 border-white dark:border-gray-700 shadow-md" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDyCKmyWKr7ViSy9-Eda6RQtk68Sy5bB7-E_8m3EHE4s2I0259V41ouausLUBuDMZyIIJJMasfgQWftjNIB7GbN5hME-tz3aAv1lONZsZ7HUEaqd8wxdfp3q0kvHKlXX2X7zATP6tr_2sW3yK_C-1I8qMQmHw6H8ji07e2pDltuvIQUJLaJ24_c3NkEGVtDKwzGWTcLOW3P9g_MHsWdzSlmSEoJN39VdNAmcIbz_x1MRTt5r-KdL0GM6B7MASGF1GogPdTXj4qTLr0")' }}>
+                            <div className="h-16 w-16 rounded-full bg-primary/10 border-2 border-white dark:border-gray-700 shadow-md flex items-center justify-center text-2xl font-bold text-primary overflow-hidden">
+                                {user?.avatarUrl && user.avatarUrl !== 'default-avatar.jpg' ? (
+                                    <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+                                ) : (
+                                    <span>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</span>
+                                )}
                             </div>
-                            <div className="absolute bottom-0 right-0 h-4 w-4 rounded-full bg-green-500 border-2 border-white dark:border-background-dark"></div>
                         </div>
                         <div className="flex flex-col justify-center">
                             <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-text-main dark:text-white">
@@ -53,9 +57,8 @@ export default function DriverDashboard() {
                             </div>
                         </div>
                     </div>
-                    <button className="relative rounded-full p-2 text-text-sub hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors">
+                    <button onClick={() => router.push('/driver/history')} className="relative rounded-full p-2 text-text-sub hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors">
                         <span className="material-symbols-outlined">notifications</span>
-                        <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500"></span>
                     </button>
                 </div>
             </div>

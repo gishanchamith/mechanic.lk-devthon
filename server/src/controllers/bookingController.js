@@ -53,6 +53,13 @@ const getMyBookings = asyncHandler(async (req, res) => {
 // @access  Private (Driver)
 const updateBookingStatus = asyncHandler(async (req, res) => {
     const { status } = req.body;
+
+    const allowedStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+    if (!status || !allowedStatuses.includes(status)) {
+        res.status(400);
+        throw new Error(`Invalid status. Allowed: ${allowedStatuses.join(', ')}`);
+    }
+
     const booking = await Booking.findById(req.params.id);
 
     if (!booking) {

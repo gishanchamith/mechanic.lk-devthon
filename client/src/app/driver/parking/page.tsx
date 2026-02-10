@@ -4,12 +4,25 @@ import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { ParkingCard } from '@/components/features/ParkingCard';
+import { Toast } from '@/components/ui/Toast';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 
-// Dynamically import Map to avoid SSR issues with Leaflet
 const Map = dynamic(() => import('@/components/ui/Map'), {
     ssr: false,
-    loading: () => <div className="h-[calc(100vh-180px)] w-full bg-gray-100 dark:bg-gray-800 animate-pulse flex items-center justify-center text-gray-400">Loading Map...</div>
+    loading: () => <div className="h-full w-full bg-gray-100 dark:bg-gray-800 animate-pulse flex items-center justify-center text-gray-400">Loading Map...</div>
 });
+
+function calcDistance(lat1: number, lon1: number, lat2: number, lon2: number): string {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const d = R * c;
+    return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)}km`;
+}
 
 export default function ParkingPage() {
     const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
@@ -20,27 +33,24 @@ export default function ParkingPage() {
     const [hours, setHours] = useState('1');
     const [bookingLoading, setBookingLoading] = useState(false);
     const [bookingError, setBookingError] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-    // Get User Location
     useEffect(() => {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     setUserLocation([position.coords.latitude, position.coords.longitude]);
                 },
-                (error) => {
-                    console.error("Error getting location", error);
-                    // Default to Colombo
+                () => {
                     setUserLocation([6.9271, 79.8612]);
                 }
             );
         } else {
-            console.error("Geolocation not supported");
             setUserLocation([6.9271, 79.8612]);
         }
     }, []);
 
-    // Fetch Nearby Spots
     useEffect(() => {
         const fetchSpots = async () => {
             try {
@@ -48,7 +58,6 @@ export default function ParkingPage() {
                 if (userLocation) {
                     url += `?lat=${userLocation[0]}&long=${userLocation[1]}&radius=10`;
                 }
-
                 const res = await fetch(url);
                 const data = await res.json();
 
@@ -59,8 +68,8 @@ export default function ParkingPage() {
                 } else {
                     setSpots([]);
                 }
-            } catch (error) {
-                console.error("Error fetching parking spots", error);
+            } catch {
+                setSpots([]);
             } finally {
                 setLoading(false);
             }
@@ -71,11 +80,29 @@ export default function ParkingPage() {
         }
     }, [userLocation]);
 
-    const mapMarkers = spots.map(spot => ({
+    const getDistance = (spot: any): string => {
+        if (!userLocation || !spot.location?.coordinates) return 'N/A';
+        return calcDistance(
+            userLocation[0], userLocation[1],
+            spot.location.coordinates[1], spot.location.coordinates[0]
+        );
+    };
+
+    const filteredSpots = spots.filter((spot) => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+            spot.title?.toLowerCase().includes(q) ||
+            spot.description?.toLowerCase().includes(q) ||
+            spot.vehicleTypes?.some((v: string) => v.toLowerCase().includes(q))
+        );
+    });
+
+    const mapMarkers = filteredSpots.map(spot => ({
         id: spot._id,
         position: [spot.location.coordinates[1], spot.location.coordinates[0]] as [number, number],
         title: spot.title,
-        description: `$${spot.pricePerHour}/hr`,
+        description: `LKR ${spot.pricePerHour}/hr`,
         type: 'parking' as const
     }));
 
@@ -112,6 +139,7 @@ export default function ParkingPage() {
                 throw new Error(data.message || 'Failed to reserve');
             }
             setSelectedSpot(null);
+            setToast({ message: 'Parking spot reserved successfully!', type: 'success' });
         } catch (err: any) {
             setBookingError(err.message || 'Something went wrong');
         } finally {
@@ -119,8 +147,12 @@ export default function ParkingPage() {
         }
     };
 
+    const totalCost = selectedSpot ? (Number(hours) * selectedSpot.pricePerHour) : 0;
+
     return (
         <div className="relative h-screen w-full bg-background-light dark:bg-background-dark overflow-hidden flex flex-col">
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
             {/* Header */}
             <div className="absolute top-0 z-20 w-full px-6 pt-6 pb-2 bg-gradient-to-b from-background-light/90 to-transparent dark:from-background-dark/90 pointer-events-none">
                 <div className="pointer-events-auto flex items-center gap-3 mb-4">
@@ -129,12 +161,16 @@ export default function ParkingPage() {
                         <input
                             type="text"
                             placeholder="Find parking..."
-                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium text-text-main dark:text-white placeholder:text-text-sub"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium text-text-main dark:text-white placeholder:text-text-sub outline-none"
                         />
+                        {searchQuery && (
+                            <button onClick={() => setSearchQuery('')} className="text-gray-400 hover:text-gray-600">
+                                <span className="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                        )}
                     </div>
-                    <button className="h-10 w-10 rounded-full bg-white dark:bg-card-dark shadow-soft flex items-center justify-center text-text-main dark:text-white border border-gray-100 dark:border-gray-800">
-                        <span className="material-symbols-outlined">tune</span>
-                    </button>
                 </div>
 
                 {/* Toggle View */}
@@ -155,7 +191,7 @@ export default function ParkingPage() {
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 relative mt-[130px]"> {/* Offset for header */}
+            <div className="flex-1 relative mt-[130px]">
                 {/* Map View */}
                 <div className={`absolute inset-0 transition-opacity duration-300 ${viewMode === 'map' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
                     {userLocation && (
@@ -170,21 +206,25 @@ export default function ParkingPage() {
                 {/* List View */}
                 <div className={`absolute inset-0 overflow-y-auto px-6 pb-32 transition-opacity duration-300 ${viewMode === 'list' ? 'opacity-100 z-10 bg-background-light dark:bg-background-dark' : 'opacity-0 z-0 pointer-events-none'}`}>
                     {loading ? (
-                        <p className="text-center text-gray-500 mt-10">Finding spots...</p>
-                    ) : spots.length === 0 ? (
+                        <div className="grid gap-4 pt-2">
+                            <SkeletonCard />
+                            <SkeletonCard />
+                            <SkeletonCard />
+                        </div>
+                    ) : filteredSpots.length === 0 ? (
                         <div className="text-center mt-20 opacity-60">
                             <span className="material-symbols-outlined text-4xl mb-2">location_off</span>
-                            <p>No parking spots found nearby.</p>
+                            <p>{searchQuery ? 'No parking spots match your search.' : 'No parking spots found nearby.'}</p>
                         </div>
                     ) : (
                         <div className="grid gap-4 pt-2">
-                            {spots.map(spot => (
+                            {filteredSpots.map(spot => (
                                 <ParkingCard
                                     key={spot._id}
                                     title={spot.title}
                                     description={spot.description}
                                     pricePerHour={spot.pricePerHour}
-                                    distance="0.5km" // Calculate real distance if needed
+                                    distance={getDistance(spot)}
                                     vehicleTypes={spot.vehicleTypes}
                                     onBook={() => handleOpenBooking(spot)}
                                 />
@@ -195,7 +235,7 @@ export default function ParkingPage() {
             </div>
 
             {selectedSpot && (
-                <div className="fixed inset-0 z-60 flex items-end justify-center bg-black/40 p-4">
+                <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-4">
                     <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-card-dark p-5 shadow-xl">
                         <div className="flex items-start justify-between mb-3">
                             <div>
@@ -214,7 +254,7 @@ export default function ParkingPage() {
                             <div className="mb-3 rounded-xl bg-red-100 text-red-600 p-2 text-xs font-bold">{bookingError}</div>
                         )}
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 mb-3">
                             <label className="text-sm font-bold text-text-main dark:text-white">Hours</label>
                             <input
                                 type="number"
@@ -223,6 +263,9 @@ export default function ParkingPage() {
                                 value={hours}
                                 onChange={(e) => setHours(e.target.value)}
                             />
+                            <span className="text-sm text-text-sub dark:text-gray-400 ml-auto">
+                                Total: <span className="font-bold text-primary">LKR {totalCost.toFixed(2)}</span>
+                            </span>
                         </div>
                         <button
                             onClick={handleCreateBooking}

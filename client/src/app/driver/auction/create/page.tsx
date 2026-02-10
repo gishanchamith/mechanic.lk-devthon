@@ -1,48 +1,24 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-interface Vehicle {
-    id: string;
-    make: string;
-    model: string;
-    year: string;
-    plate: string;
-}
+import { VehicleSelector } from '@/components/features/VehicleSelector';
+import { Toast } from '@/components/ui/Toast';
 
 export default function PostAuctionPage() {
     const router = useRouter();
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-    const [selectedVehicleId, setSelectedVehicleId] = useState('');
     const [formData, setFormData] = useState({
         make: '',
         model: '',
         year: '',
         isDrivable: true,
         description: '',
-        images: [] as File[], // Store actual files
-        imagePreviews: [] as string[] // Store preview URLs
+        images: [] as File[],
+        imagePreviews: [] as string[]
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-
-    useEffect(() => {
-        const stored = localStorage.getItem('driverVehicles');
-        if (stored) {
-            setVehicles(JSON.parse(stored));
-        }
-    }, []);
-
-    const applyVehicle = (vehicle: Vehicle | null) => {
-        if (!vehicle) return;
-        setFormData((prev) => ({
-            ...prev,
-            make: vehicle.make,
-            model: vehicle.model,
-            year: vehicle.year
-        }));
-    };
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { id, value } = e.target;
@@ -82,8 +58,8 @@ export default function PostAuctionPage() {
 
         try {
             const data = new FormData();
-            data.append('make', formData.make.split(' ')[0] || formData.make);
-            data.append('model', formData.model || formData.make.split(' ').slice(1).join(' '));
+            data.append('make', formData.make);
+            data.append('model', formData.model);
             data.append('year', formData.year);
             data.append('drivable', String(formData.isDrivable));
             data.append('description', formData.description);
@@ -109,8 +85,7 @@ export default function PostAuctionPage() {
                 const errData = await res.json();
                 setError(errData.message || 'Failed to post auction');
             }
-        } catch (err) {
-            console.error(err);
+        } catch {
             setError('Something went wrong');
         } finally {
             setLoading(false);
@@ -119,6 +94,7 @@ export default function PostAuctionPage() {
 
     return (
         <div className="bg-background-light dark:bg-background-dark font-display text-text-main dark:text-text-light antialiased selection:bg-primary/20 min-h-screen flex flex-col pb-24">
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
             {/* Top Navigation */}
             <div className="sticky top-0 z-50 flex items-center justify-between bg-background-light/90 dark:bg-background-dark/90 px-4 py-3 backdrop-blur-md transition-colors border-b border-gray-100 dark:border-gray-800">
                 <button
@@ -192,27 +168,18 @@ export default function PostAuctionPage() {
                 <section className="rounded-2xl bg-surface-light dark:bg-surface-dark p-5 shadow-soft">
                     <h3 className="mb-4 text-lg font-bold text-text-main dark:text-text-light">Vehicle Details</h3>
                     <div className="space-y-5">
-                        {/* Garage Selector */}
-                        <div className="group relative">
-                            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-text-muted-dark">Saved Vehicle</label>
-                            <select
-                                className="w-full rounded-xl border-0 bg-background-light dark:bg-background-dark py-3.5 px-4 text-sm font-medium text-text-main ring-1 ring-inset ring-gray-200 transition-all focus:ring-2 focus:ring-primary dark:text-white dark:ring-gray-700"
-                                value={selectedVehicleId}
-                                onChange={(e) => {
-                                    const value = e.target.value;
-                                    setSelectedVehicleId(value);
-                                    const selected = vehicles.find((v) => v.id === value) || null;
-                                    applyVehicle(selected);
-                                }}
-                            >
-                                <option value="">Choose from garage (optional)</option>
-                                {vehicles.map((vehicle) => (
-                                    <option key={vehicle.id} value={vehicle.id}>
-                                        {vehicle.year} {vehicle.make} {vehicle.model}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                        {/* Vehicle Selector from Garage */}
+                        <VehicleSelector
+                            onVehicleChange={(details) => {
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    make: details.make,
+                                    model: details.model,
+                                    year: details.year
+                                }));
+                            }}
+                            initialValues={{ make: formData.make, model: formData.model, year: formData.year }}
+                        />
                         {/* Make & Model */}
                         <div className="group relative">
                             <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-text-muted-dark" htmlFor="make">Make & Model</label>

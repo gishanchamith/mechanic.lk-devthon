@@ -43,7 +43,11 @@ export default function ProfilePage() {
         <div className="min-h-screen bg-background-light dark:bg-background-dark pb-24">
             <div className="relative h-48 bg-gradient-to-br from-primary to-blue-600">
                 <div className="absolute -bottom-10 left-6 h-24 w-24 rounded-full border-4 border-white dark:border-background-dark bg-white dark:bg-card-dark flex items-center justify-center text-4xl font-bold text-primary shadow-lg overflow-hidden">
-                    {user.name.charAt(0)}
+                    {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+                    ) : (
+                        user.name.charAt(0)
+                    )}
                 </div>
             </div>
 
@@ -55,17 +59,31 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="bg-white dark:bg-card-dark rounded-2xl p-2 shadow-soft border border-gray-100 dark:border-gray-800">
-                    <button className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                    <button onClick={() => router.push('/driver/settings')} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
                         <div className="flex items-center gap-3">
                             <span className="material-symbols-outlined text-gray-400">settings</span>
                             <span className="font-bold text-text-main dark:text-white">Settings</span>
                         </div>
                         <span className="material-symbols-outlined text-gray-400">chevron_right</span>
                     </button>
-                    <button className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                    <button onClick={() => router.push('/driver/garage')} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
                         <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-gray-400">help</span>
-                            <span className="font-bold text-text-main dark:text-white">Help & Support</span>
+                            <span className="material-symbols-outlined text-gray-400">garage</span>
+                            <span className="font-bold text-text-main dark:text-white">My Garage</span>
+                        </div>
+                        <span className="material-symbols-outlined text-gray-400">chevron_right</span>
+                    </button>
+                    <button onClick={() => router.push('/driver/wallet')} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                        <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-gray-400">account_balance_wallet</span>
+                            <span className="font-bold text-text-main dark:text-white">Wallet</span>
+                        </div>
+                        <span className="material-symbols-outlined text-gray-400">chevron_right</span>
+                    </button>
+                    <button onClick={() => router.push('/driver/history')} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                        <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-gray-400">history</span>
+                            <span className="font-bold text-text-main dark:text-white">History</span>
                         </div>
                         <span className="material-symbols-outlined text-gray-400">chevron_right</span>
                     </button>

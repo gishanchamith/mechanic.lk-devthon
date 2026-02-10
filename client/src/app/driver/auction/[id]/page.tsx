@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { PaymentModal } from '@/components/features/PaymentModal';
+import { Toast } from '@/components/ui/Toast';
 
 interface AuctionBid {
     _id: string;
-    bidder: { name: string };
+    bidder: { name: string; phone?: string };
     amount: number;
     estimatedTime: string;
     note?: string;
@@ -24,12 +26,6 @@ interface AuctionDetail {
     acceptedBid?: string;
 }
 
-interface PaymentMethod {
-    _id: string;
-    label: string;
-    customerToken: string;
-}
-
 export default function DriverAuctionDetailPage() {
     const router = useRouter();
     const params = useParams();
@@ -39,18 +35,12 @@ export default function DriverAuctionDetailPage() {
     const [error, setError] = useState('');
     const [acceptingId, setAcceptingId] = useState<string | null>(null);
     const [showPayment, setShowPayment] = useState(false);
-    const [paymentMode, setPaymentMode] = useState<'payhere' | 'cash'>('payhere');
-    const [methods, setMethods] = useState<PaymentMethod[]>([]);
-    const [selectedMethodId, setSelectedMethodId] = useState('');
-    const [paymentAmount, setPaymentAmount] = useState('');
-    const [paymentItems, setPaymentItems] = useState('Auction repair');
-    const [paymentError, setPaymentError] = useState('');
-    const [paymentLoading, setPaymentLoading] = useState(false);
     const [statusLoading, setStatusLoading] = useState(false);
     const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
     const [zoom, setZoom] = useState(1);
     const [touchStartX, setTouchStartX] = useState<number | null>(null);
     const [mouseStartX, setMouseStartX] = useState<number | null>(null);
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
     useEffect(() => {
         const fetchAuction = async () => {
@@ -109,23 +99,11 @@ export default function DriverAuctionDetailPage() {
                 throw new Error(data.message || 'Failed to accept bid');
             }
             setAuction(data);
+            setToast({ message: 'Bid accepted!', type: 'success' });
         } catch (err: any) {
             setError(err.message || 'Something went wrong');
         } finally {
             setAcceptingId(null);
-        }
-    };
-
-    const fetchMethods = async () => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const res = await fetch('http://localhost:5000/api/payments/methods', {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (Array.isArray(data)) {
-            setMethods(data);
         }
     };
 
@@ -136,83 +114,7 @@ export default function DriverAuctionDetailPage() {
     };
 
     const openPayment = () => {
-        const defaultAmount = getAcceptedBidAmount();
-        if (defaultAmount) {
-            setPaymentAmount(String(defaultAmount));
-        }
-        setPaymentItems('Auction repair');
-        setPaymentMode('payhere');
-        setPaymentError('');
         setShowPayment(true);
-        fetchMethods();
-    };
-
-    const handleCompleteWithPayment = async () => {
-        if (!auctionId) return;
-        if (!paymentAmount) {
-            setPaymentError('Amount is required.');
-            return;
-        }
-
-        setPaymentLoading(true);
-        setPaymentError('');
-
-        try {
-            const token = localStorage.getItem('token');
-            if (paymentMode === 'payhere') {
-                if (!selectedMethodId) {
-                    setPaymentError('Please select a payment method.');
-                    setPaymentLoading(false);
-                    return;
-                }
-
-                const res = await fetch('http://localhost:5000/api/payments/charge', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        paymentMethodId: selectedMethodId,
-                        amount: Number(paymentAmount),
-                        currency: 'LKR',
-                        items: paymentItems || 'Auction repair',
-                        sourceType: 'auction',
-                        sourceId: auctionId
-                    })
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.message || data.gateway?.msg || 'Charge failed');
-                }
-            } else {
-                const res = await fetch('http://localhost:5000/api/payments/cash', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        amount: Number(paymentAmount),
-                        currency: 'LKR',
-                        items: paymentItems || 'Auction repair',
-                        sourceType: 'auction',
-                        sourceId: auctionId
-                    })
-                });
-                if (!res.ok) {
-                    const data = await res.json();
-                    throw new Error(data.message || 'Failed to record cash payment');
-                }
-            }
-
-            await handleStatusUpdate('Completed');
-            setShowPayment(false);
-        } catch (err: any) {
-            setPaymentError(err.message || 'Something went wrong');
-        } finally {
-            setPaymentLoading(false);
-        }
     };
 
     const handleStatusUpdate = async (status: string) => {
@@ -409,7 +311,7 @@ export default function DriverAuctionDetailPage() {
                                             <p className="text-xs text-text-sub dark:text-gray-400">{bid.estimatedTime}</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-lg font-black text-primary">${bid.amount}</p>
+                                            <p className="text-lg font-black text-primary">LKR {bid.amount}</p>
                                             <p className="text-xs text-text-sub dark:text-gray-400">{new Date(bid.createdAt).toLocaleDateString()}</p>
                                         </div>
                                     </div>
@@ -419,9 +321,20 @@ export default function DriverAuctionDetailPage() {
 
                                     <div className="mt-4">
                                         {isAccepted ? (
-                                            <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                                Accepted
-                                            </span>
+                                            <div>
+                                                <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                                    Accepted
+                                                </span>
+                                                {bid.bidder?.phone && (
+                                                    <div className="mt-2 flex items-center gap-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 p-3">
+                                                        <span className="material-symbols-outlined text-blue-600 text-[18px]">call</span>
+                                                        <div>
+                                                            <p className="text-xs font-bold text-blue-700 dark:text-blue-400">Contact Mechanic</p>
+                                                            <a href={`tel:${bid.bidder.phone}`} className="text-sm font-bold text-blue-600 hover:underline">{bid.bidder.phone}</a>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         ) : (
                                             <button
                                                 onClick={() => handleAcceptBid(bid._id)}
@@ -500,84 +413,23 @@ export default function DriverAuctionDetailPage() {
             )}
 
             {showPayment && (
-                <div className="fixed inset-0 z-60 flex items-end justify-center bg-black/40 p-4">
-                    <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-card-dark p-5 shadow-xl">
-                        <div className="flex items-start justify-between mb-3">
-                            <div>
-                                <h3 className="text-lg font-bold text-text-main dark:text-white">Complete & Pay</h3>
-                                <p className="text-sm text-text-sub dark:text-gray-400">Auction payment</p>
-                            </div>
-                            <button
-                                onClick={() => setShowPayment(false)}
-                                className="rounded-full p-2 text-text-sub hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                            >
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-
-                        {paymentError && (
-                            <div className="mb-3 rounded-xl bg-red-100 text-red-600 p-2 text-xs font-bold">{paymentError}</div>
-                        )}
-
-                        <div className="mb-3 flex items-center gap-3">
-                            <label className="text-xs font-bold uppercase tracking-wide text-text-sub">Mode</label>
-                            <button
-                                onClick={() => setPaymentMode('payhere')}
-                                className={`rounded-full px-3 py-1 text-xs font-bold ${paymentMode === 'payhere' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'}`}
-                            >
-                                PayHere
-                            </button>
-                            <button
-                                onClick={() => setPaymentMode('cash')}
-                                className={`rounded-full px-3 py-1 text-xs font-bold ${paymentMode === 'cash' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'}`}
-                            >
-                                Cash
-                            </button>
-                        </div>
-
-                        {paymentMode === 'payhere' && (
-                            <div className="mb-3">
-                                <label className="block text-xs font-bold uppercase tracking-wide text-text-sub mb-2">Payment Method</label>
-                                <select
-                                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
-                                    value={selectedMethodId}
-                                    onChange={(e) => setSelectedMethodId(e.target.value)}
-                                >
-                                    <option value="">Select token</option>
-                                    {methods.map((method) => (
-                                        <option key={method._id} value={method._id}>
-                                            {method.label} (ending {method.customerToken.slice(-6)})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <input
-                                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
-                                placeholder="Amount (LKR)"
-                                value={paymentAmount}
-                                onChange={(e) => setPaymentAmount(e.target.value)}
-                            />
-                            <input
-                                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
-                                placeholder="Items"
-                                value={paymentItems}
-                                onChange={(e) => setPaymentItems(e.target.value)}
-                            />
-                        </div>
-
-                        <button
-                            onClick={handleCompleteWithPayment}
-                            disabled={paymentLoading}
-                            className="mt-3 w-full rounded-xl bg-primary py-3 text-sm font-bold text-white shadow-glow hover:bg-primary/90 disabled:opacity-60"
-                        >
-                            {paymentLoading ? 'Processing...' : paymentMode === 'cash' ? 'Record Cash & Complete' : 'Pay & Complete'}
-                        </button>
-                    </div>
-                </div>
+                <PaymentModal
+                    title="Complete & Pay"
+                    subtitle="Auction repair payment"
+                    defaultAmount={String(getAcceptedBidAmount() || '')}
+                    defaultItems="Auction repair"
+                    sourceType="auction"
+                    sourceId={auctionId}
+                    onClose={() => setShowPayment(false)}
+                    onSuccess={async () => {
+                        await handleStatusUpdate('Completed');
+                        setShowPayment(false);
+                        setToast({ message: 'Payment completed!', type: 'success' });
+                    }}
+                />
             )}
+
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

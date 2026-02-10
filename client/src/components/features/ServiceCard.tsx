@@ -37,7 +37,7 @@ export function ServiceCard({ title, providerName, price, rating, timeEstimate, 
 
             <div className="mt-auto flex items-end justify-between border-t border-gray-100 dark:border-gray-700 pt-4">
                 <div>
-                    <span className="text-2xl font-black text-primary">${price}</span>
+                    <span className="text-2xl font-black text-primary">LKR {price}</span>
                     <p className="text-xs text-text-sub font-medium">{timeEstimate} • {distance}</p>
                 </div>
                 <Button size="sm" rightIcon="arrow_forward" onClick={onBook}>
